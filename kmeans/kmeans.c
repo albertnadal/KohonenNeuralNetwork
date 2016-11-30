@@ -24,9 +24,10 @@ ASSUMPTIONS:
 
 #define uint             unsigned int
 #define uint64           unsigned long
-#define datax(i)         data_points[i * 2]
-#define datay(i)         data_points[i * 2 + 1]
-#define distance(i, j)   (datax(j) - datax(i)) * (datax(j) - datax(i)) + (datay(j) - datay(i)) * (datay(j) - datay(i))
+#define datax(i)         data_points[i * 3]
+#define datay(i)         data_points[i * 3 + 1]
+#define dataz(i)         data_points[i * 3 + 2]
+#define distance(i, j)   (datax(j) - datax(i)) * (datax(j) - datax(i)) + (datay(j) - datay(i)) * (datay(j) - datay(i)) + (dataz(j) - dataz(i)) * (dataz(j) - dataz(i))
 #define is_assigned(i)   point_assignments[i].assigned
 #define set_assigned(i)  point_assignments[i].assigned = TRUE
 #define pow2(x)          ((x) * (x))
@@ -38,10 +39,12 @@ typedef struct {
   uint    num_points;
   uint64  sum_x;
   uint64  sum_y;
+  uint64  sum_z;
 
   // for calculating new centroid
   double  target_x;
   double  target_y;
+  double  target_z;
   uint64  prev_distance;
   uint64  best_distance;
 } centroid;
@@ -85,7 +88,7 @@ void dbg(const char *fmt, ...);
 
 int main(int argc, char **argv)
 {
-  uint        i, j, x, y;
+  uint        i, j, x, y, z;
   double      distance_mean, distance_sum;
   float       average_improvement;
   assignment  *ap, *ap_last;
@@ -127,9 +130,10 @@ int main(int argc, char **argv)
     // centroid coords
     x = datax(cp->point_id);
     y = datay(cp->point_id);
+    z = dataz(cp->point_id);
 
     if (cp->num_points <= 1) {
-      printf("%d\t%d\t%d\t0.0\n", x, y, cp->num_points);
+      printf("%d\t%d\t%d\t%d\t0.0\n", x, y, z, cp->num_points);
     } else {
       // calculate mean distance
       distance_sum = 0.0;
@@ -146,7 +150,7 @@ int main(int argc, char **argv)
         distance_sum += pow2(sqrt(ap->distance) - distance_mean);
       }
 
-      printf("%d\t%d\t%d\t%.1lf\n", x, y, cp->num_points, sqrt(distance_sum / (cp->num_points - 1)));
+      printf("%d\t%d\t%d\t%d\t%.1lf\n", x, y, z, cp->num_points, sqrt(distance_sum / (cp->num_points - 1)));
     }
   }
 
@@ -170,6 +174,7 @@ void update_assignments()
     cp->num_points = 0;
     cp->sum_x = 0;
     cp->sum_y = 0;
+    cp->sum_z = 0;
   }
 
   // for each data point...
@@ -190,6 +195,7 @@ void update_assignments()
     // update centroid stats
     centroids[nearest_centroid].sum_x += datax(i);
     centroids[nearest_centroid].sum_y += datay(i);
+    centroids[nearest_centroid].sum_z += dataz(i);
     centroids[nearest_centroid].num_points++;
   }
 
@@ -201,7 +207,7 @@ void update_assignments()
  */
 void update_centroids()
 {
-  uint        i, a, b;
+  uint        i, a, b, c;
   uint        *dp;
   uint64      d;
   float       k;
@@ -214,6 +220,7 @@ void update_centroids()
   for (cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; cp++) {
     cp->target_x = cp->sum_x / cp->num_points;
     cp->target_y = cp->sum_y / cp->num_points;
+    cp->target_z = cp->sum_z / cp->num_points;
     cp->prev_distance = cp->best_distance;
     cp->best_distance = BIG_NUM;
   }
@@ -222,7 +229,8 @@ void update_centroids()
   for (i = 0, cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; i++, cp++) {
     a = datax(cp->point_id) - cp->target_x;
     b = datay(cp->point_id) - cp->target_y;
-    dbg("old centroid %d (%d, %d), target = (%.1lf, %.1lf), distance = %d\n", i, datax(cp->point_id), datay(cp->point_id), cp->target_x, cp->target_y, a * a + b * b);
+    c = datay(cp->point_id) - cp->target_z;
+    dbg("old centroid %d (%d, %d, %d), target = (%.1lf, %.1lf), distance = %d\n", i, datax(cp->point_id), datay(cp->point_id), dataz(cp->point_id), cp->target_x, cp->target_y, cp->target_z, a * a + b * b + c * c);
   }
   #endif
 
@@ -235,7 +243,8 @@ void update_centroids()
     // calculate distance to target
     a = *dp - cp->target_x;
     b = *(dp + 1) - cp->target_y;
-    d = a * a + b * b;
+    c = *(dp + 2) - cp->target_z;
+    d = a * a + b * b + c * c;
 
     // new closest point?
     if (cp->best_distance > d) {
@@ -248,7 +257,7 @@ void update_centroids()
   improved = 0;
   improvement = 0.0;
   for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
-    dbg("new centroid %d (%d, %d), distance: %ld => %ld", i, datax(cp->point_id), datay(cp->point_id), cp->prev_distance, cp->best_distance);
+    dbg("new centroid %d (%d, %d, %d), distance: %ld => %ld", i, datax(cp->point_id), datay(cp->point_id), dataz(cp->point_id), cp->prev_distance, cp->best_distance);
     if (cp->prev_distance) {
       k = ((float)cp->best_distance - (float)cp->prev_distance) / (float)cp->prev_distance;
       improvement += fabs(k);
@@ -271,13 +280,13 @@ void setup_data_points()
   char line[LINE_SIZE];
 
   // allocate data array
-  data_points = (uint *)calloc(num_points * 2, sizeof(uint));
+  data_points = (uint *)calloc(num_points * 3, sizeof(uint));
 
   // read data from file into array
   file = fopen(input_file_name, "rt");
   for (uint i = 0; i < num_points; i++) {
     fgets(line, LINE_SIZE, file);
-    sscanf(line, "%d,%d", &datax(i), &datay(i));
+    sscanf(line, "%d,%d,%d", &datax(i), &datay(i), &dataz(i));
   }
   fclose(file);
 }
@@ -295,7 +304,7 @@ void setup_assignments()
  */
 void setup_centroids()
 {
-  uint i, j, k, x, y;
+  uint i, j, k, x, y, z;
   struct timeval tv;
 
   // seed rand with microseconds to increase variance if called repeatedly quickly
@@ -318,9 +327,10 @@ void setup_centroids()
       // this traversal works because we know the data set is sorted
       x = datax(j);
       y = datay(j);
-      for (k = j; k < num_points && x == datax(k) && y == datay(k); k++)
+      z = dataz(j);
+      for (k = j; k < num_points && x == datax(k) && y == datay(k) && z == dataz(k); k++)
         set_assigned(k);
-      for (k = j; k-- > 0 && x == datax(k) && y == datay(k); )
+      for (k = j; k-- > 0 && x == datax(k) && y == datay(k) && z == dataz(k); )
         set_assigned(k);
 
       // on to next centroid
@@ -340,7 +350,7 @@ void setup_centroids()
   #ifdef DEBUG
   for (uint pid = 0, i = 0; i < num_clusters; i++) {
     pid = centroids[i].point_id;
-    printf("centroids[%d]: point_id = %d (%d, %d)\n", i, pid, datax(pid), datay(pid));
+    printf("centroids[%d]: point_id = %d (%d, %d, %d)\n", i, pid, datax(pid), datay(pid), dataz(pid));
   }
   #endif
 }
@@ -364,13 +374,13 @@ void dump_state()
   // centroids
   for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
     pid = cp->point_id;
-    dbg("centroids[%d]: point_id = %d (%d, %d), %d points, sum_x = %ld, sum_y = %ld\n", i, pid, datax(pid), datay(pid), cp->num_points, cp->sum_x, cp->sum_y);
+    dbg("centroids[%d]: point_id = %d (%d, %d, %d), %d points, sum_x = %ld, sum_y = %ld, sum_z = %ld\n", i, pid, datax(pid), datay(pid), dataz(pid), cp->num_points, cp->sum_x, cp->sum_y, cp->sum_z);
     dbg("centroids[%d]:", i);
     for (j = 0, k = 0, ap = point_assignments; j < num_points; j++, ap++) {
       if (ap->centroid_id == i) {
         if (k && k % 10 == 0)
           dbg("\n             ");
-        dbg(" %d,%d", datax(j), datay(j));
+        dbg(" %d,%d,%d", datax(j), datay(j), dataz(j));
         k++;
       }
     }

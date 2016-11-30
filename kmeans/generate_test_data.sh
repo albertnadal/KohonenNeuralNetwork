@@ -9,6 +9,5 @@ MAX=${2-1000}
 
 for i in `seq 0 1 $SIZE`
 do
-	echo "`expr $RANDOM % $MAX`,`expr $RANDOM % $MAX`"
+	echo "`expr $RANDOM % $MAX`,`expr $RANDOM % $MAX`,`expr $RANDOM % $MAX`"
 done
-
