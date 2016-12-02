@@ -50,10 +50,9 @@ int initial_radius = 70;
 #define uint             unsigned int
 #define uint64           unsigned long
 #define MAX_KMEANS_ITERATIONS 100
-#define datax(i)         kmeans_data_points[i * 3]
-#define datay(i)         kmeans_data_points[i * 3 + 1]
-#define dataz(i)         kmeans_data_points[i * 3 + 2]
-#define distance(i, j)   (datax(j) - datax(i)) * (datax(j) - datax(i)) + (datay(j) - datay(i)) * (datay(j) - datay(i)) + (dataz(j) - dataz(i)) * (dataz(j) - dataz(i))
+#define datax(i)         kmeans_data_points[i * 2]
+#define datay(i)         kmeans_data_points[i * 2 + 1]
+#define distance(i, j)   (datax(j) - datax(i)) * (datax(j) - datax(i)) + (datay(j) - datay(i)) * (datay(j) - datay(i))
 #define is_assigned(i)   point_assignments[i].assigned
 #define set_assigned(i)  point_assignments[i].assigned = TRUE
 #define pow2(x)          ((x) * (x))
@@ -65,12 +64,10 @@ typedef struct {
   uint    num_points;
   uint64  sum_x;
   uint64  sum_y;
-  uint64  sum_z;
 
   // for calculating new centroid
   double  target_x;
   double  target_y;
-  double  target_z;
   uint64  prev_distance;
   uint64  best_distance;
 } centroid;
@@ -112,7 +109,7 @@ void load_and_initialize_samples()
   char line[LINE_SIZE];
 
   // 'kmeans_data_points' is the data structure used to store the sample points for k-means algorithm process
-  kmeans_data_points = (uint *)calloc(total_samples * 3, sizeof(uint));
+  // kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
 
   // 'samples' is the data structure used to store the sample points for Kohonen algorithm process
   samples = (Sample *) malloc(sizeof(Sample) * total_samples);
@@ -121,11 +118,8 @@ void load_and_initialize_samples()
   file = fopen(input_file_name, "rt");
   for (uint i = 0; i < total_samples; i++) {
     fgets(line, LINE_SIZE, file);
-    sscanf(line, "%d,%d,%d", &datax(i), &datay(i), &dataz(i));
-
-    samples[i].x = datax(i);
-    samples[i].y = datay(i);
-    samples[i].z = dataz(i);
+//    sscanf(line, "%d,%d", &datax(i), &datay(i));
+    sscanf(line, "%d,%d,%d", &samples[i].x, &samples[i].y, &samples[i].z);
   }
   fclose(file);
 }
@@ -152,6 +146,10 @@ void initialize_som_map()
 
 Sample* pick_random_sample() {
   int i = randr(0,total_samples - 1);
+  return &samples[i];
+}
+
+Sample* pick_sample(int i) {
   return &samples[i];
 }
 
@@ -290,7 +288,7 @@ void output_html(BMU *centroids) {
     for(int x = 0; x < MAP_WIDTH; x++) {
 
       found = FALSE;
-      for (int i = 0; i < num_clusters; i++) {
+      for (int i = 0; ((i < num_clusters) && (centroids)); i++) {
         if((centroids[i].x_coord == x) && (centroids[i].y_coord == y)) {
           found = TRUE;
         }
@@ -331,7 +329,6 @@ void update_assignments()
     cp->num_points = 0;
     cp->sum_x = 0;
     cp->sum_y = 0;
-    cp->sum_z = 0;
   }
 
   // for each data point...
@@ -352,7 +349,6 @@ void update_assignments()
     // update centroid stats
     centroids[nearest_centroid].sum_x += datax(i);
     centroids[nearest_centroid].sum_y += datay(i);
-    centroids[nearest_centroid].sum_z += dataz(i);
     centroids[nearest_centroid].num_points++;
   }
 
@@ -363,7 +359,7 @@ void update_assignments()
  */
 void update_centroids()
 {
-  uint        i, a, b, c;
+  uint        i, a, b;
   uint        *dp;
   uint64      d;
   float       k;
@@ -374,7 +370,6 @@ void update_centroids()
   for (cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; cp++) {
     cp->target_x = cp->sum_x / cp->num_points;
     cp->target_y = cp->sum_y / cp->num_points;
-    cp->target_z = cp->sum_z / cp->num_points;
     cp->prev_distance = cp->best_distance;
     cp->best_distance = BIG_NUM;
   }
@@ -388,8 +383,7 @@ void update_centroids()
     // calculate distance to target
     a = *dp - cp->target_x;
     b = *(dp + 1) - cp->target_y;
-    c = *(dp + 2) - cp->target_z;
-    d = a * a + b * b + c * c;
+    d = a * a + b * b;
 
     // new closest point?
     if (cp->best_distance > d) {
@@ -424,7 +418,7 @@ void setup_assignments()
  */
 void setup_centroids()
 {
-  uint i, j, k, x, y, z;
+  uint i, j, k, x, y;
   struct timeval tv;
 
   // seed rand with microseconds to increase variance if called repeatedly quickly
@@ -447,10 +441,10 @@ void setup_centroids()
       // this traversal works because we know the data set is sorted
       x = datax(j);
       y = datay(j);
-      z = dataz(j);
-      for (k = j; k < total_samples && x == datax(k) && y == datay(k) && z == dataz(k); k++)
+
+      for (k = j; k < total_samples && x == datax(k) && y == datay(k); k++)
         set_assigned(k);
-      for (k = j; k-- > 0 && x == datax(k) && y == datay(k) && z == dataz(k); )
+      for (k = j; k-- > 0 && x == datax(k) && y == datay(k); )
         set_assigned(k);
 
       // on to next centroid
@@ -468,9 +462,9 @@ void setup_centroids()
     num_clusters = i;
 }
 
-void search_clusters_in_samples()
+void search_clusters_in_bmu()
 {
-  uint        i, j, x, y, z;
+  uint        i, j, x, y;
   double      distance_mean, distance_sum;
   float       average_improvement;
   assignment  *ap, *ap_last;
@@ -496,10 +490,9 @@ void search_clusters_in_samples()
     // centroid coords
     x = datax(cp->point_id);
     y = datay(cp->point_id);
-    z = dataz(cp->point_id);
 
     if (cp->num_points <= 1) {
-      printf("%d\t%d\t%d\t%d\t0.0\n", x, y, z, cp->num_points);
+      printf("%d\t%d\t%d\t0.0\n", x, y, cp->num_points);
     } else {
       // calculate mean distance
       distance_sum = 0.0;
@@ -516,7 +509,7 @@ void search_clusters_in_samples()
         distance_sum += pow2(sqrt(ap->distance) - distance_mean);
       }
 
-      printf("%d\t%d\t%d\t%d\t%.1lf\n", x, y, z, cp->num_points, sqrt(distance_sum / (cp->num_points - 1)));
+      printf("Centroid: (%d,%d)\tCluster size(bmu's): %d\tAvg. distance: %.1lf\n", x, y, cp->num_points, sqrt(distance_sum / (cp->num_points - 1)));
     }
   }
 
@@ -540,12 +533,13 @@ int main(int argc, char **argv)
     total_samples = atoi(argv[2]);
     num_clusters = atoi(argv[3]);
 
+    // seed random
+    srand(time(NULL));
+
     load_and_initialize_samples();
-    search_clusters_in_samples();
 
     initialize_som_map();
-    //output_html();
-    sleep(5);
+    output_html(0);
 
     int iteration_num = 0;
 
@@ -556,28 +550,39 @@ int main(int argc, char **argv)
       scale_neighbors(bmu, sample, t);
       free(bmu);
 
-      cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * num_clusters);
-      for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
-        // centroid coords
-        Sample *centroid = (Sample *) malloc(sizeof(Sample));
-        centroid->x = datax(cp->point_id);
-        centroid->y = datay(cp->point_id);
-        centroid->z = dataz(cp->point_id);
-        centroid_bmu = (BMU *)search_bmu(centroid);
-        cluster_centroid_bmus[i].x_coord = centroid_bmu->x_coord;
-        cluster_centroid_bmus[i].y_coord = centroid_bmu->y_coord;
-        free(centroid);
-        free(centroid_bmu);
-      }
-
       t += T_INC;
 
-      output_html(cluster_centroid_bmus);
-      free(cluster_centroid_bmus);
+      output_html(0);
 
-      usleep(100000);
+      //usleep(100000);
     }
 
+
+    // Collect the final BMU coordinates in the SOM map
+    kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
+    for (uint i = 0; i < total_samples; i++) {
+	Sample *sample = pick_sample(i);	
+	bmu = search_bmu(sample); // Best Match Unit
+        datax(i) = bmu->x_coord;
+	datay(i) = bmu->y_coord;
+	free(bmu);
+    }
+
+    // Search clusters from BMU coordinates
+    search_clusters_in_bmu();
+
+    // Prepare structure for painting clusters centroids
+    cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * num_clusters);
+    for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
+        cluster_centroid_bmus[i].x_coord = datax(cp->point_id);
+        cluster_centroid_bmus[i].y_coord = datay(cp->point_id);
+    	free(centroid_bmu);
+    }
+
+    output_html(cluster_centroid_bmus);
+
+    free(cluster_centroid_bmus);
+    free(kmeans_data_points);
     free_allocated_memory();
 
     return 0;
