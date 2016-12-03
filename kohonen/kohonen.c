@@ -7,8 +7,8 @@
 #include <time.h>
 
 // START Kohonen Algorithm defines and global variables
-#define MAP_WIDTH 75
-#define MAP_HEIGHT 43
+#define MAP_WIDTH 175
+#define MAP_HEIGHT 110
 
 typedef struct Neuron {
    unsigned int x;
@@ -37,7 +37,7 @@ typedef struct Sample {
 
 Neuron** map;
 Sample* samples;
-int initial_radius = 70;
+int initial_radius = 170;
 
 // END Kohonen definitions and global variables
 
@@ -270,9 +270,11 @@ char* concat(const char *s1, const char *s2)
     return result;
 }
 
-void output_html(BMU *centroids) {
+void output_html(BMU *centroids, BMU *final_bmus) {
 
-  bool found = FALSE;
+  bool found_centroid = FALSE;
+  bool found_bmu = FALSE;
+
   FILE *f = fopen("test.html", "w");
   if (f == NULL)
   {
@@ -280,24 +282,33 @@ void output_html(BMU *centroids) {
       exit(1);
   }
 
-  fprintf(f, "<html><head><script>setTimeout(function(){ window.location.reload(1); }, 1000);</script></head><body>");
+  fprintf(f, "<html><head></head><body>");
   fprintf(f, "<table style='border-collapse: collapse;'>");
 
   for(int y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(int x = 0; x < MAP_WIDTH; x++) {
 
-      found = FALSE;
+      found_centroid = FALSE;
       for (int i = 0; ((i < num_clusters) && (centroids)); i++) {
         if((centroids[i].x_coord == x) && (centroids[i].y_coord == y)) {
-          found = TRUE;
+          found_centroid = TRUE;
         }
       }
 
-      if(found) {
-        fprintf(f, "<td style='width:15px;height:15px;background-color:rgb(0,0,0);'></td>");
-      } else {
-        fprintf(f, "<td style='width:15px;height:15px;background-color:rgb(%d,%d,%d);'></td>", map[x][y].x, map[x][y].y, map[x][y].z);
+      found_bmu = FALSE;
+      for (int i = 0; ((i < total_samples) && (final_bmus)); i++) {
+        if((final_bmus[i].x_coord == x) && (final_bmus[i].y_coord == y)) {
+          found_bmu = TRUE;
+        }
+      }
+
+      if(found_centroid) {
+        fprintf(f, "<td style='width:6px;height:6px;background-color:rgb(110,255,0);'></td>");
+      } else if(found_bmu) {
+        fprintf(f, "<td style='width:6px;height:6px;background-color:rgb(255,255,255);'></td>");
+      }else {
+        fprintf(f, "<td style='width:6px;height:6px;background-color:rgb(%d,%d,%d);'></td>", map[x][y].x, map[x][y].y, map[x][y].z);
       }
 
     }
@@ -366,16 +377,23 @@ void update_centroids()
   assignment  *ap;
   centroid    *cp, *cp_last;
 
+  printf("\ninitialize centroids...\n");
   // initialize
   for (cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; cp++) {
-    cp->target_x = cp->sum_x / cp->num_points;
-    cp->target_y = cp->sum_y / cp->num_points;
+    printf("\n sum_x: %lu | sum_y: %lu | num_points: %d\n", cp->sum_x, cp->sum_y, cp->num_points);
+    cp->target_x = cp->num_points ? (cp->sum_x / cp->num_points) : (cp->sum_x / 1);
+    printf("A");
+    cp->target_y = cp->num_points ? (cp->sum_y / cp->num_points) : (cp->sum_y / 1);
+    printf("B");
     cp->prev_distance = cp->best_distance;
+    printf("C");
     cp->best_distance = BIG_NUM;
+    printf("D");
   }
 
   // go through points; for each respective centroid, find the
   // point closest to the target new centroid
+  printf("\nfinding closest pint to the target...\n");
   for (i = 0, ap = point_assignments, dp = kmeans_data_points; i < total_samples; i++, ap++, dp += 2) {
     // get my centroid
     cp = centroids + ap->centroid_id;
@@ -395,6 +413,7 @@ void update_centroids()
   // check improvement
   improved = 0;
   improvement = 0.0;
+  printf("\ncheck improvement...\n");
   for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
     if (cp->prev_distance) {
       k = ((float)cp->best_distance - (float)cp->prev_distance) / (float)cp->prev_distance;
@@ -473,10 +492,15 @@ void search_clusters_in_bmu()
   setup_assignments();
   setup_centroids();
 
+  printf("\nSTART kmeans iterations...\n");
+
   for (uint i = 0; i < MAX_KMEANS_ITERATIONS; i++) {
+    printf("\nupdating assignments... (%d)\n", i);
     update_assignments();
+    printf("\nupdating centroids... (%d)\n", i);
     update_centroids();
     if (improved) {
+      printf("\nupdating average improvement... (%d)\n", i);
       average_improvement = improvement / improved;
 
       // done if average improvement is less than 0.1%
@@ -484,6 +508,9 @@ void search_clusters_in_bmu()
         break;
     }
   }
+
+  printf("\nEND kmeans iterations...\n");
+  printf("\nSTART calculating centroid distances...\n");
 
   // calculate standard deviation of point-to-centroid distances
   for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
@@ -513,18 +540,20 @@ void search_clusters_in_bmu()
     }
   }
 
+  printf("\nEND calculating centroid distances...\n");
+
 }
 
 // END K-Means algorithm methods
 
 int main(int argc, char **argv)
 {
-    int MAX_ITER = 1000;
+    int MAX_ITER = 30000;
     float T_INC = 1.0f/(float)(MAX_ITER);
     float t = 0.0f;
     BMU *bmu;
     BMU *cluster_centroid_bmus;
-    BMU *centroid_bmu;
+    BMU *final_bmus;
     centroid  *cp;
     uint i;
 
@@ -539,7 +568,7 @@ int main(int argc, char **argv)
     load_and_initialize_samples();
 
     initialize_som_map();
-    output_html(0);
+    //output_html(0,0);
 
     int iteration_num = 0;
 
@@ -552,7 +581,7 @@ int main(int argc, char **argv)
 
       t += T_INC;
 
-      output_html(0);
+      //output_html(0,0);
 
       //usleep(100000);
     }
@@ -560,28 +589,36 @@ int main(int argc, char **argv)
 
     // Collect the final BMU coordinates in the SOM map
     kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
+    final_bmus = (BMU *)malloc(sizeof(BMU) * num_clusters);
     for (uint i = 0; i < total_samples; i++) {
 	Sample *sample = pick_sample(i);	
 	bmu = search_bmu(sample); // Best Match Unit
         datax(i) = bmu->x_coord;
 	datay(i) = bmu->y_coord;
+        final_bmus[i].x_coord = bmu->x_coord;
+        final_bmus[i].y_coord = bmu->y_coord;
+
 	free(bmu);
     }
 
+    printf("\nSTART searching clusters in bmus...\n");
+
     // Search clusters from BMU coordinates
     search_clusters_in_bmu();
+
+    printf("\nEND searching clusters in bmus...\n");
 
     // Prepare structure for painting clusters centroids
     cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * num_clusters);
     for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
         cluster_centroid_bmus[i].x_coord = datax(cp->point_id);
         cluster_centroid_bmus[i].y_coord = datay(cp->point_id);
-    	free(centroid_bmu);
     }
 
-    output_html(cluster_centroid_bmus);
+    output_html(cluster_centroid_bmus, final_bmus);
 
     free(cluster_centroid_bmus);
+    free(final_bmus);
     free(kmeans_data_points);
     free_allocated_memory();
 
