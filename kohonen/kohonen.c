@@ -5,23 +5,28 @@
 #include <stdarg.h>
 #include <math.h>
 #include <time.h>
+#include "huebar_color.h"
 
 // START Kohonen Algorithm defines and global variables
-#define MAP_WIDTH 340
-#define MAP_HEIGHT 225
+#define MAP_WIDTH 80
+#define MAP_HEIGHT 60
 
 typedef struct Neuron {
    unsigned int x;
    unsigned int y;
    unsigned int z;
-   float weight;
 } Neuron;
 
 typedef struct BMU {
    unsigned int x_coord;
    unsigned int y_coord;
-   float distance;
 } BMU;
+
+typedef struct CentroidBMU {
+   unsigned int x_coord;
+   unsigned int y_coord;
+   int count;
+} CentroidBMU;
 
 typedef struct Coordinate {
    float x;
@@ -36,7 +41,7 @@ typedef struct Sample {
 
 Neuron** map;
 Sample* samples;
-int initial_radius = 340;
+int initial_radius = 80;
 float round_radius;
 
 // END Kohonen definitions and global variables
@@ -80,14 +85,14 @@ typedef struct {
 
 char        *input_file_name;
 uint        total_samples;
-uint        num_clusters;
+uint        max_clusters;
 centroid    *centroids;
 uint        *kmeans_data_points;
 assignment  *point_assignments;
 uint        improved = 0;
 float       improvement = 0.0;
 
-void setup_centroids();
+void setup_centroids(uint num_clusters);
 void setup_assignments();
 void update_assignments();
 void update_centroids();
@@ -124,7 +129,7 @@ void load_and_initialize_samples()
     samples[i].x = (int)((x * 255)/260);
     samples[i].y = (int)((y * 255)/5);
     samples[i].z = (int)((z * 255)/1500);
-   printf("INPUT M2:%d | Hab:%d | Price:%d\n", samples[i].x, samples[i].y, samples[i].z);
+   //printf("INPUT M2:%d | Hab:%d | Price:%d\n", samples[i].x, samples[i].y, samples[i].z);
   }
   fclose(file);
 }
@@ -143,7 +148,6 @@ void initialize_som_map()
       map[x][y].x = randr(0,255);
       map[x][y].y = randr(0,255);
       map[x][y].z = randr(0,255);
-      map[x][y].weight = sqrt((map[x][y].x * map[x][y].x) + (map[x][y].y * map[x][y].y) + (map[x][y].z * map[x][y].z));
     }
   }
 
@@ -176,7 +180,6 @@ BMU* search_bmu(Sample *sample) {
       if(dist < max_dist) {
         bmu->x_coord = x;
         bmu->y_coord = y;
-        bmu->distance = dist;
         max_dist = dist;
       }
     }
@@ -274,11 +277,13 @@ char* concat(const char *s1, const char *s2)
     return result;
 }
 
-void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload) {
-
+void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
+{
   bool found_centroid = FALSE;
   bool found_bmu = FALSE;
-  int x_val, y_val, z_val;
+  int diff_val, max_val, min_val, x_val, y_val, z_val, y, x, i, value;
+  float e;
+  RGB *huebar = create_color_huebar(255);
 
   FILE *f = fopen("test.html", "w");
   if (f == NULL)
@@ -292,21 +297,23 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload) {
   } else {
     fprintf(f, "<html><head></head><body>");
   }
+
+  fprintf(f, "<br/><h2>Neural Network SOM Map</h2>");
   fprintf(f, "<table style='border-collapse: collapse;'>");
 
-  for(int y = 0; y < MAP_HEIGHT; y++) {
+  for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
-    for(int x = 0; x < MAP_WIDTH; x++) {
+    for(x = 0; x < MAP_WIDTH; x++) {
 
       found_centroid = FALSE;
-      for (int i = 0; ((i < num_clusters) && (centroids)); i++) {
+      for (i = 0; ((i < max_clusters) && (centroids)); i++) {
         if((centroids[i].x_coord == x) && (centroids[i].y_coord == y)) {
           found_centroid = TRUE;
         }
       }
 
       found_bmu = FALSE;
-      for (int i = 0; ((i < total_samples) && (final_bmus)); i++) {
+      for (i = 0; ((i < total_samples) && (final_bmus)); i++) {
         if((final_bmus[i].x_coord == x) && (final_bmus[i].y_coord == y)) {
           found_bmu = TRUE;
         }
@@ -320,17 +327,166 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload) {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(110,255,0);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
       } else if(found_bmu) {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(255,255,255);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
-      }else {
+      } else {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", map[x][y].x, map[x][y].y, map[x][y].z, x, y, z_val, x_val, y_val);
       }
 
     }
     fprintf(f, "</tr>");
   }
-
   fprintf(f, "</table>");
-  fprintf(f, "</body></html>");
 
+  fprintf(f, "<br/><h2>Components</h2>");
+
+  fprintf(f, "<div style=\"width:500px;height:250px\">");
+  fprintf(f, "<h3>Metres quadrats</h3>");
+  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
+  // Search the min and max values of each vector component
+  max_val = 0;
+  min_val = 9999999;
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    for(x = 0; x < MAP_WIDTH; x++) {
+      x_val = (int)((map[x][y].x * 260)/255);
+      if(min_val > x_val) {
+        min_val = x_val;
+      }
+
+      if(max_val < x_val) {
+        max_val = x_val;
+      }
+    }
+  }
+
+  diff_val = max_val - min_val;
+
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    fprintf(f, "<tr>");
+    for(x = 0; x < MAP_WIDTH; x++) {
+      value = (int)((map[x][y].x * 260)/255);
+      x_val = (int)(((value - min_val) * 255)/diff_val);
+      RGB *color = &huebar[x_val];
+      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
+    }
+    fprintf(f, "</tr>");
+  }
+  fprintf(f, "</table></div>");
+
+  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
+  for(e = 0.0f; e < 255.0f; e+=2.86f) {
+    RGB *color = &huebar[(int)e];
+    if(e == 0.0f) {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
+    } else {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
+    }
+  }
+  fprintf(f, "</table></div>");
+
+  fprintf(f, "</div>");
+
+
+  fprintf(f, "<div style=\"width:500px;height:250px\">");
+  fprintf(f, "<h3>Habitacions</h3>");
+  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
+  // Search the min and max values of each vector component
+  max_val = 0;
+  min_val = 9999999;
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    for(x = 0; x < MAP_WIDTH; x++) {
+      y_val = (int)((map[x][y].y * 5)/255);
+      if(min_val > y_val) {
+        min_val = y_val;
+      }
+
+      if(max_val < y_val) {
+        max_val = y_val;
+      }
+    }
+  }
+
+  diff_val = max_val - min_val;
+
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    fprintf(f, "<tr>");
+    for(x = 0; x < MAP_WIDTH; x++) {
+      value = (int)((map[x][y].y * 5)/255);
+      y_val = (int)(((value - min_val) * 255)/diff_val);
+      RGB *color = &huebar[y_val];
+      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
+    }
+    fprintf(f, "</tr>");
+  }
+  fprintf(f, "</table></div>");
+
+  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
+  for(e = 0.0f; e < 255.0f; e+=2.86f) {
+    RGB *color = &huebar[(int)e];
+    if(e == 0.0f) {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
+    } else {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
+    }
+  }
+  fprintf(f, "</table></div>");
+  fprintf(f, "</div>");
+
+
+
+
+  fprintf(f, "<div style=\"width:500px;height:250px\">");
+  fprintf(f, "<h3>Preu lloguer</h3>");
+  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
+  // Search the min and max values of each vector component
+  max_val = 0;
+  min_val = 9999999;
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    for(x = 0; x < MAP_WIDTH; x++) {
+      z_val = (int)((map[x][y].z * 1500)/255);
+      if(min_val > z_val) {
+        min_val = z_val;
+      }
+
+      if(max_val < z_val) {
+        max_val = z_val;
+      }
+    }
+  }
+
+  diff_val = max_val - min_val;
+
+  for(y = 0; y < MAP_HEIGHT; y++) {
+    fprintf(f, "<tr>");
+    for(x = 0; x < MAP_WIDTH; x++) {
+      value = (int)((map[x][y].z * 1500)/255);
+      z_val = (int)(((value - min_val) * 255)/diff_val);
+      RGB *color = &huebar[z_val];
+      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
+    }
+    fprintf(f, "</tr>");
+  }
+
+  fprintf(f, "</table></div>");
+
+  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
+  for(e = 0.0f; e < 255.0f; e+=2.86f) {
+    RGB *color = &huebar[(int)e];
+    if(e == 0.0f) {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
+    } else {
+      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
+    }
+  }
+
+  fprintf(f, "</table></div>");
+  fprintf(f, "</div>");
+
+
+
+  fprintf(f, "</tr></table>");
+
+
+  free(huebar);
+  fprintf(f, "</body></html>");
   fclose(f);
 }
 
@@ -341,7 +497,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload) {
 /**
  * assign data points to current centroids
  */
-void update_assignments()
+void update_assignments(uint num_clusters)
 {
   uint      i, j, d;
   uint      nearest_centroid;
@@ -381,7 +537,7 @@ void update_assignments()
 /**
  * pick new centroids based on mean coordinates in the cluster
  */
-void update_centroids()
+void update_centroids(uint num_clusters)
 {
   uint        i, a, b;
   uint        *dp;
@@ -441,7 +597,7 @@ void setup_assignments()
 /**
  * allocate the array for centroids, then pick the initial centroids
  */
-void setup_centroids()
+void setup_centroids(uint num_clusters)
 {
   uint i, j, k, x, y;
   struct timeval tv;
@@ -487,7 +643,7 @@ void setup_centroids()
     num_clusters = i;
 }
 
-void search_clusters_in_bmu()
+void search_clusters_in_bmu(uint num_clusters)
 {
   uint        i, j, x, y;
   double      distance_mean, distance_sum;
@@ -496,11 +652,11 @@ void search_clusters_in_bmu()
   centroid    *cp;
 
   setup_assignments();
-  setup_centroids();
+  setup_centroids(num_clusters);
 
   for (uint i = 0; i < MAX_KMEANS_ITERATIONS; i++) {
-    update_assignments();
-    update_centroids();
+    update_assignments(num_clusters);
+    update_centroids(num_clusters);
     if (improved) {
       average_improvement = improvement / improved;
 
@@ -555,23 +711,29 @@ int main(int argc, char **argv)
     BMU *bmu;
     BMU *cluster_centroid_bmus;
     BMU *final_bmus;
+    CentroidBMU *centroid_bmus_storage;
+    CentroidBMU centroid_bmu;
+    int total_centroid_bmus = 0;
     centroid  *cp;
-    uint i;
+    uint i, e, o, num_clusters;
     int iteration_num;
     int round_num;
     Sample *sample;
+    bool found = FALSE;
 
-    // usage: ./kohonen file_with_samples total_samples num_clusters
+    // usage: ./kohonen file_with_samples total_samples max_clusters
     input_file_name = argv[1];
     total_samples = atoi(argv[2]);
-    num_clusters = atoi(argv[3]);
+    max_clusters = atoi(argv[3]);
 
     // seed random
     srand(time(NULL));
 
     kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
     final_bmus = (BMU *)malloc(sizeof(BMU) * total_samples);
-    cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * num_clusters);
+    cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * max_clusters);
+    centroid_bmus_storage = (CentroidBMU *)malloc(sizeof(CentroidBMU) * max_clusters * 10);
+
     load_and_initialize_samples();
 
     initialize_som_map();
@@ -604,34 +766,74 @@ int main(int argc, char **argv)
          //usleep(100000);
        }
 
-       // Collect the final BMU coordinates in the SOM map
-       for (uint i = 0; i < total_samples; i++) {
-         sample = pick_sample(i);
-         bmu = search_bmu(sample); // Best Match Unit
-
-         datax(i) = (uint)bmu->x_coord;
-         datay(i) = (uint)bmu->y_coord;
-         final_bmus[i].x_coord = (uint)bmu->x_coord;
-         final_bmus[i].y_coord = (uint)bmu->y_coord;
-
-         free(bmu);
-       }
-
-       // Search clusters from BMU coordinates
-       search_clusters_in_bmu();
-
-       // Prepare structure for painting clusters centroids
-       for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
-           cluster_centroid_bmus[i].x_coord = datax(cp->point_id);
-           cluster_centroid_bmus[i].y_coord = datay(cp->point_id);
-       }
-
-       output_html(cluster_centroid_bmus, final_bmus, TRUE);
-
        r += ROUND_INC;
        round_num++;
     }
 
+    output_html(cluster_centroid_bmus, final_bmus, TRUE);
+
+    // Save the BMU coordinates in the SOM map
+    for (uint i = 0; i < total_samples; i++) {
+      sample = pick_sample(i);
+      bmu = search_bmu(sample); // Best Match Unit
+
+      datax(i) = (uint)bmu->x_coord;
+      datay(i) = (uint)bmu->y_coord;
+      final_bmus[i].x_coord = (uint)bmu->x_coord;
+      final_bmus[i].y_coord = (uint)bmu->y_coord;
+
+      free(bmu);
+    }
+
+
+    // NOTA: Tenir en compte els centroids que apareixen amb més freqüència a mesura que s'augmenta el nombre de clusters no
+    // és efectiu. Aquests centroids poden no sér realment bons.
+    // Cal donar prioritat als centroids que contenen més nodes i de més proximitat!!!
+    // CAL MODIFICAR/MILLORAR L'ALGORISME!!!
+
+    // Search BMU clusters
+    //for(num_clusters = 0; num_clusters < max_clusters; num_clusters++) {
+
+       num_clusters = max_clusters;
+
+      //for(e = 0; e < 10; e++) {
+        // Search clusters from BMU coordinates
+        search_clusters_in_bmu(num_clusters);
+        printf("\n*\n");
+        // Prepare structure for painting clusters centroids
+        /*
+        for (i = 0, cp = centroids; i < max_clusters; i++, cp++) {
+            cluster_centroid_bmus[i].x_coord = datax(cp->point_id);
+            cluster_centroid_bmus[i].y_coord = datay(cp->point_id);
+
+            found = FALSE;
+            for (o = 0; (o < total_centroid_bmus) && (!found); o++) {
+              if((centroid_bmus_storage[o].x_coord == datax(cp->point_id)) && (centroid_bmus_storage[o].y_coord == datay(cp->point_id))) {
+                centroid_bmus_storage[o].count++;
+                found = TRUE;
+              }
+            }
+
+            if(!found) {
+              centroid_bmus_storage[total_centroid_bmus].x_coord = datax(cp->point_id);
+              centroid_bmus_storage[total_centroid_bmus].y_coord = datay(cp->point_id);
+              centroid_bmus_storage[total_centroid_bmus].count++;
+              total_centroid_bmus++;
+            }
+
+        }*/
+
+      //}
+
+    //}
+/*
+    printf("\n\nWinning centroids:\n");
+
+    for(e = 0; e < total_centroid_bmus; e++) {
+      centroid_bmu = centroid_bmus_storage[e];
+      printf("Centroid: (%d,%d)\tCount: %d\n", centroid_bmu.x_coord, centroid_bmu.y_coord, centroid_bmu.count);
+    }
+*/
     output_html(cluster_centroid_bmus, final_bmus, FALSE);
 
     free(cluster_centroid_bmus);
