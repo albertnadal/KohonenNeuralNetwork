@@ -10,6 +10,7 @@
 // START Kohonen Algorithm defines and global variables
 #define MAP_WIDTH 80
 #define MAP_HEIGHT 60
+#define NORMALIZATION_VALUE 10000
 #define pow2(x) ((x) * (x))
 #define BIG_NUM          999999999999999999
 #define LINE_SIZE        300
@@ -211,24 +212,11 @@ void load_and_initialize_samples(char *filename)
 
   // Normalize values based on max value of each component from 0 to 255
   for (int i = 0; i < total_samples; i++) {
-    //printf("INPUT\n");
     for(int e = 0; e < total_components; e++) {
       value = samples[i].components[e];
-      //printf("VALUE: %d | MAX VAL: %d | ", value, samples_max_components_values[e]);
-      samples[i].components[e] = (unsigned int)((value * 255)/(samples_max_components_values[e] - samples_min_components_values[e]));
-      if(e==1) {
-        printf("HAB: %d | NORM: %d\n", value, samples[i].components[e]);
-      }
-      //printf("NORMALIZED: %d\n", samples[i].components[e]);
+      samples[i].components[e] = (unsigned int)((value * NORMALIZATION_VALUE)/(samples_max_components_values[e] - samples_min_components_values[e]));
     }
-    //printf("\n");
   }
-  /*
-      samples[i].components[0] = (unsigned int)((x * 255)/260);
-      samples[i].components[1] = (unsigned int)((y * 255)/5);
-      samples[i].components[2] = (unsigned int)((z * 255)/1500);
-  */
-  //printf("INPUT M2:%d | Hab:%d | Price:%d\n", samples[i].components[0], samples[i].components[1], samples[i].components[2]);
 
 }
 
@@ -246,7 +234,7 @@ void initialize_som_map()
       map[x][y].components = (unsigned int *) malloc(sizeof(unsigned int) * total_components);
 
       for(int i=0; i<total_components;i++) {
-        map[x][y].components[i] = randr(0,255);
+        map[x][y].components[i] = randr(0,NORMALIZATION_VALUE);
       }
     }
   }
@@ -349,7 +337,6 @@ void scale_neighbors(BMU *bmu, Sample *sample, float t) {
     }
   }
 
-  //printf("ITERATION RADIUS: %f | NORMALIZED RADIUS: %f\n", iteration_radius, distance_normalized);
   free(outer);
   free(center);
 }
@@ -388,7 +375,7 @@ char* concat(const char *s1, const char *s2)
 void output_html(BMU *final_bmus, bool auto_reload)
 {
   bool found_bmu = FALSE;
-  int diff_val, max_val, min_val, x_val, y_val, z_val, i, value;
+  int diff_val, max_val, min_val, x_val, y_val, z_val, i, value, red, green, blue;
   uint x, y;
   float e;
   RGB *huebar = create_color_huebar(255);
@@ -420,14 +407,18 @@ void output_html(BMU *final_bmus, bool auto_reload)
         }
       }
 
-      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
-      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
-      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
+      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
+      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
+      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
+
+      red = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
+      green = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
+      blue = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
 
       if(found_bmu) {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(255,255,255);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
       } else {
-        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", map[x][y].components[0], map[x][y].components[1], map[x][y].components[2], x, y, z_val, x_val, y_val);
+        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", red, green, blue, x, y, z_val, x_val, y_val);
       }
 
     }
@@ -445,7 +436,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
+      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
       if(min_val > x_val) {
         min_val = x_val;
       }
@@ -461,7 +452,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
+      value = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
       x_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[x_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -492,7 +483,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
+      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
       if(min_val > y_val) {
         min_val = y_val;
       }
@@ -508,7 +499,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
+      value = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
       y_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[y_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -540,7 +531,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
+      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
       if(min_val > z_val) {
         min_val = z_val;
       }
@@ -556,7 +547,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
+      value = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
       z_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[z_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -597,12 +588,12 @@ int main(int argc, char **argv)
     char *filename = argv[1];
     load_and_initialize_samples(filename);
 
-    int MAX_TRAINING_ROUNDS = 12;
+    int MAX_TRAINING_ROUNDS = 10;
     float ROUND_INC = 1.0f/(float)(MAX_TRAINING_ROUNDS);
     float r = 0.0f;
 
-    int MAX_ITER = total_samples * 50; // Number of iterations is 50 times the number of input samples
-    float T_INC = 1.0f/(float)(MAX_ITER);
+    int MAX_ITER_PER_ROUND = total_samples * 30; // Number of iterations is 30 times the number of input samples
+    float T_INC = 1.0f/(float)(MAX_ITER_PER_ROUND);
     float t = 0.0f;
     BMU *bmu;
     BMU *final_bmus;
