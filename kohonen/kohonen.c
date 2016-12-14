@@ -63,7 +63,7 @@ float round_radius;
 
 typedef int bool;
 
-int         total_samples;
+int total_samples;
 
 // END k-Means definitions and global variables
 
@@ -214,7 +214,7 @@ void load_and_initialize_samples(char *filename)
   for (int i = 0; i < total_samples; i++) {
     for(int e = 0; e < total_components; e++) {
       value = samples[i].components[e];
-      samples[i].components[e] = (unsigned int)((value * NORMALIZATION_VALUE)/(samples_max_components_values[e] - samples_min_components_values[e]));
+      samples[i].components[e] = (unsigned int)(((value - samples_min_components_values[e]) * NORMALIZATION_VALUE)/(samples_max_components_values[e] - samples_min_components_values[e]));
     }
   }
 
