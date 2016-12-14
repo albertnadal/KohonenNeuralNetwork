@@ -1,3 +1,4 @@
+Metres quadrats,Habitacions,Preu lloguer
 60,3,375
 96,3,650
 135,4,550

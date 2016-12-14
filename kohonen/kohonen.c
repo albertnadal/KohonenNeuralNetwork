@@ -10,11 +10,19 @@
 // START Kohonen Algorithm defines and global variables
 #define MAP_WIDTH 80
 #define MAP_HEIGHT 60
+#define pow2(x) ((x) * (x))
+#define BIG_NUM          999999999999999999
+#define LINE_SIZE        300
+#define FALSE            0
+#define TRUE             1
+#define uint             unsigned int
+#define uint64           unsigned long
 
 typedef struct Neuron {
-   unsigned int x;
-   unsigned int y;
-   unsigned int z;
+   unsigned int* components;
+   //unsigned int x;
+   //unsigned int y;
+   //unsigned int z;
 } Neuron;
 
 typedef struct BMU {
@@ -34,69 +42,26 @@ typedef struct Coordinate {
 } Coordinate;
 
 typedef struct Sample {
-   unsigned int x;
-   unsigned int y;
-   unsigned int z;
+   unsigned int* components;
 } Sample;
 
 Neuron** map;
 Sample* samples;
+int total_components;
+char** components_name;
+uint* samples_max_components_values;
 int initial_radius = 80;
 float round_radius;
 
 // END Kohonen definitions and global variables
 
 // START k-Means Algorithm defines and global variables
-
-#define BIG_NUM          999999999999999999
-#define LINE_SIZE        80
-#define FALSE            0
-#define TRUE             1
-#define uint             unsigned int
-#define uint64           unsigned long
-#define MAX_KMEANS_ITERATIONS 100
-#define datax(i)         kmeans_data_points[i * 2]
-#define datay(i)         kmeans_data_points[i * 2 + 1]
 #define distance(i, j)   (datax(j) - datax(i)) * (datax(j) - datax(i)) + (datay(j) - datay(i)) * (datay(j) - datay(i))
-#define is_assigned(i)   point_assignments[i].assigned
-#define set_assigned(i)  point_assignments[i].assigned = TRUE
-#define pow2(x)          ((x) * (x))
+
 
 typedef int bool;
 
-typedef struct {
-  uint    point_id;
-  uint    num_points;
-  uint64  sum_x;
-  uint64  sum_y;
-
-  // for calculating new centroid
-  double  target_x;
-  double  target_y;
-  uint64  prev_distance;
-  uint64  best_distance;
-} centroid;
-
-typedef struct {
-  uint    centroid_id;
-  uint64  distance;
-  char    assigned;
-} assignment;
-
-char        *input_file_name;
-uint        total_samples;
-uint        max_clusters;
-centroid    *centroids;
-uint        *kmeans_data_points;
-assignment  *point_assignments;
-uint        improved = 0;
-float       improvement = 0.0;
-
-void setup_centroids(uint num_clusters);
-void setup_assignments();
-void update_assignments();
-void update_centroids();
-int gettimeofday(struct timeval *restrict tp, void *restrict tzp);
+int         total_samples;
 
 // END k-Means definitions and global variables
 
@@ -108,30 +73,153 @@ unsigned int randr(unsigned int min, unsigned int max)
   return (max - min +1)*scaled + min;
 }
 
-void load_and_initialize_samples()
+char** explode_string(char* a_str, const char a_delim, int* total_items)
+{
+    char** result    = 0;
+    size_t count     = 0;
+    char* tmp        = a_str;
+    char* last_comma = 0;
+    char delim[2];
+    delim[0] = a_delim;
+    delim[1] = 0;
+
+    /* Count how many elements will be extracted. */
+    while (*tmp)
+    {
+        if (a_delim == *tmp)
+        {
+            count++;
+            last_comma = tmp;
+        }
+        tmp++;
+    }
+
+    /* Add space for trailing token. */
+    count += last_comma < (a_str + strlen(a_str) - 1);
+    *total_items = count;
+
+    /* Add space for terminating null string so caller
+       knows where the list of returned strings ends. */
+    count++;
+
+    result = malloc(sizeof(char*) * count);
+
+    if (result)
+    {
+        size_t idx  = 0;
+        char* token = strtok(a_str, delim);
+
+        while (token)
+        {
+            *(result + idx++) = strdup(token);
+            token = strtok(0, delim);
+        }
+        *(result + idx) = 0;
+    }
+
+    return result;
+}
+
+int stringToInteger(char a[]) {
+  int c, sign, offset, n;
+
+  if (a[0] == '-') {  // Handle negative integers
+    sign = -1;
+  }
+
+  if (sign == -1) {  // Set starting position to convert
+    offset = 1;
+  }
+  else {
+    offset = 0;
+  }
+
+  n = 0;
+
+  for (c = offset; (a[c] != '\0') && (a[c] != '\n'); c++) {
+    n = n * 10 + a[c] - '0';
+  }
+
+  if (sign == -1) {
+    n = -n;
+  }
+
+  return n;
+}
+
+void load_and_initialize_samples(char *filename)
 {
   FILE *file;
   char line[LINE_SIZE];
-  int x, y, z;
+  char** line_components;
+  int ch, x, y, z, total_line_components;
+  uint value;
 
-  // 'kmeans_data_points' is the data structure used to store the sample points for k-means algorithm process
-  // kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
+  total_samples = 0;
+
+  file = fopen(filename, "r");
+  while(!feof(file)) {
+    ch = fgetc(file);
+    if(ch == '\n') {
+      total_samples++;
+    }
+  }
+  fclose(file);
+
+  printf("\n\nTotal samples: %d\n\n", total_samples);
 
   // 'samples' is the data structure used to store the sample points for Kohonen algorithm process
   samples = (Sample *) malloc(sizeof(Sample) * total_samples);
 
-  // read data from file into array
-  file = fopen(input_file_name, "rt");
-  for (uint i = 0; i < total_samples; i++) {
-    fgets(line, LINE_SIZE, file);
-//    sscanf(line, "%d,%d", &datax(i), &datay(i));
-    sscanf(line, "%d,%d,%d", &x, &y, &z);
-    samples[i].x = (int)((x * 255)/260);
-    samples[i].y = (int)((y * 255)/5);
-    samples[i].z = (int)((z * 255)/1500);
-   //printf("INPUT M2:%d | Hab:%d | Price:%d\n", samples[i].x, samples[i].y, samples[i].z);
+  for(int i = 0; i < total_samples; i++) {
+    samples[i].components = (unsigned int *) malloc(sizeof(unsigned int) * total_components);
   }
+
+  // read data from file into array
+  file = fopen(filename, "rt");
+  fgets(line, LINE_SIZE, file);
+  components_name = explode_string(line, ',', &total_components);
+
+  samples_max_components_values = (uint*) malloc(sizeof(uint) * total_components);
+
+  // Initialize max values array to blank
+  for(int e = 0; e < total_components; e++) {
+    samples_max_components_values[e] = 0;
+  }
+
+  // Load values from file
+  for (int i = 0; i < total_samples; i++) {
+    fgets(line, LINE_SIZE, file);
+    line_components = explode_string(line, ',', &total_line_components);
+    for(int e = 0; e < total_line_components; e++) {
+      value = (unsigned int)(stringToInteger(line_components[e]));
+      samples[i].components[e] = value;
+      if(samples_max_components_values[e] < value) {
+        samples_max_components_values[e] = value;
+      }
+    }
+  }
+
   fclose(file);
+
+  // Normalize values based on max value of each component from 0 to 255
+  for (int i = 0; i < total_samples; i++) {
+    //printf("INPUT\n");
+    for(int e = 0; e < total_components; e++) {
+      value = samples[i].components[e];
+      //printf("VALUE: %d | MAX VAL: %d | ", value, samples_max_components_values[e]);
+      samples[i].components[e] = (unsigned int)((value * 255)/samples_max_components_values[e]);
+      //printf("NORMALIZED: %d\n", samples[i].components[e]);
+    }
+    //printf("\n");
+  }
+  /*
+      samples[i].components[0] = (unsigned int)((x * 255)/260);
+      samples[i].components[1] = (unsigned int)((y * 255)/5);
+      samples[i].components[2] = (unsigned int)((z * 255)/1500);
+  */
+  //printf("INPUT M2:%d | Hab:%d | Price:%d\n", samples[i].components[0], samples[i].components[1], samples[i].components[2]);
+
 }
 
 void initialize_som_map()
@@ -145,9 +233,11 @@ void initialize_som_map()
 
   for(x = 0; x < MAP_WIDTH; x++) {
     for(y = 0; y < MAP_HEIGHT; y++) {
-      map[x][y].x = randr(0,255);
-      map[x][y].y = randr(0,255);
-      map[x][y].z = randr(0,255);
+      map[x][y].components = (unsigned int *) malloc(sizeof(unsigned int) * total_components);
+
+      for(int i=0; i<total_components;i++) {
+        map[x][y].components[i] = randr(0,255);
+      }
     }
   }
 
@@ -162,16 +252,22 @@ Sample* pick_sample(int i) {
   return &samples[i];
 }
 
-float distance_between_sample_and_neuron(Sample *sample, Neuron *neuron) {
-  int x = sample->x - neuron->x;
-  int y = sample->y - neuron->y;
-  int z = sample->z - neuron->z;
-  return sqrt(x*x + y*y + z*z);
+uint distance_between_sample_and_neuron(Sample *sample, Neuron *neuron) {
+  unsigned int euclidean_distance = 0;
+  unsigned int component_diff;
+
+  for(int i = 0; i < total_components; i++) {
+    component_diff = sample->components[i] - neuron->components[i];
+    euclidean_distance += pow2(component_diff);
+  }
+
+  return euclidean_distance;
+  //return sqrt(euclidean_distance);
 }
 
 BMU* search_bmu(Sample *sample) {
-  float max_dist=999999999.9f;
-  float dist = 0.0f;
+  uint max_dist=999999999;
+  uint dist = 0;
   BMU *bmu = (BMU *) malloc(sizeof(BMU));
 
   for(int x = 0; x < MAP_WIDTH; x++) {
@@ -184,7 +280,6 @@ BMU* search_bmu(Sample *sample) {
       }
     }
   }
-
   return bmu;
 }
 
@@ -203,24 +298,15 @@ Coordinate* new_coordinate(float x, float y) {
 
 void scale_neuron_at_position(int x, int y, Sample *sample, double scale) {
 
+  float neuron_prescaled, neuron_scaled;
   Neuron *neuron = &map[x][y];
-  //printf("ORIGINAL NEURON: (%d,%d,%d) | ", neuron->x, neuron->y, neuron->z);
 
-  float neuron_prescaled_x = neuron->x * (1.0f-scale);
-  float neuron_prescaled_y = neuron->y * (1.0f-scale);
-  float neuron_prescaled_z = neuron->z * (1.0f-scale);
+  for(int i=0; i<total_components; i++) {
+    neuron_prescaled = neuron->components[i] * (1.0f-scale);
+    neuron_scaled = (sample->components[i] * scale) + neuron_prescaled;
+    neuron->components[i] = (int)neuron_scaled;
+  }
 
-  //printf("PRESCALED NEURON: (%f,%f,%f) | ", neuron_prescaled_x, neuron_prescaled_y, neuron_prescaled_z);
-
-  float neuron_scaled_x = (sample->x * scale) + neuron_prescaled_x;
-  float neuron_scaled_y = (sample->y * scale) + neuron_prescaled_y;
-  float neuron_scaled_z = (sample->z * scale) + neuron_prescaled_z;
-
-  neuron->x = (int)neuron_scaled_x;
-  neuron->y = (int)neuron_scaled_y;
-  neuron->z = (int)neuron_scaled_z;
-
-  //printf("SCALED NEURON: (%d,%d,%d)\n", neuron->x, neuron->y, neuron->z);
 }
 
 void scale_neighbors(BMU *bmu, Sample *sample, float t) {
@@ -249,9 +335,6 @@ void scale_neighbors(BMU *bmu, Sample *sample, float t) {
         x_coord = bmu->x_coord + x;
         y_coord = bmu->y_coord + y;
         scale_neuron_at_position(x_coord, y_coord, sample, scale);
-
-        //printf("X: %f | Y: %f | SCALE: %f | DISTANCE: %f | NORMALIZED DISTANCE: %f\n", x, y, scale, distance, distance_normalized);
-
       }
     }
   }
@@ -262,11 +345,25 @@ void scale_neighbors(BMU *bmu, Sample *sample, float t) {
 }
 
 void free_allocated_memory() {
+  for(int e = 0; e < total_components; e++) {
+    free(components_name[e]);
+  }
+  free(components_name);
+
+  for(int i = 0; i < total_samples; i++) {
+    free(samples[i].components);
+  }
   free(samples);
+
   for(int x = 0; x < MAP_WIDTH; x++) {
+    for(int y = 0; y < MAP_HEIGHT; y++) {
+      free(map[x][y].components);
+    }
     free(map[x]);
   }
   free(map);
+
+  free(samples_max_components_values);
 }
 
 char* concat(const char *s1, const char *s2)
@@ -277,11 +374,11 @@ char* concat(const char *s1, const char *s2)
     return result;
 }
 
-void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
+void output_html(BMU *final_bmus, bool auto_reload)
 {
-  bool found_centroid = FALSE;
   bool found_bmu = FALSE;
-  int diff_val, max_val, min_val, x_val, y_val, z_val, y, x, i, value;
+  int diff_val, max_val, min_val, x_val, y_val, z_val, i, value;
+  uint x, y;
   float e;
   RGB *huebar = create_color_huebar(255);
 
@@ -305,13 +402,6 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
 
-      found_centroid = FALSE;
-      for (i = 0; ((i < max_clusters) && (centroids)); i++) {
-        if((centroids[i].x_coord == x) && (centroids[i].y_coord == y)) {
-          found_centroid = TRUE;
-        }
-      }
-
       found_bmu = FALSE;
       for (i = 0; ((i < total_samples) && (final_bmus)); i++) {
         if((final_bmus[i].x_coord == x) && (final_bmus[i].y_coord == y)) {
@@ -319,16 +409,14 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
         }
       }
 
-      x_val = (int)((map[x][y].x * 260)/255);
-      y_val = (int)((map[x][y].y * 5)/255);
-      z_val = (int)((map[x][y].z * 1500)/255);
+      x_val = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
+      y_val = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
+      z_val = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
 
-      if(found_centroid) {
-        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(110,255,0);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
-      } else if(found_bmu) {
+      if(found_bmu) {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(255,255,255);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
       } else {
-        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", map[x][y].x, map[x][y].y, map[x][y].z, x, y, z_val, x_val, y_val);
+        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", map[x][y].components[0], map[x][y].components[1], map[x][y].components[2], x, y, z_val, x_val, y_val);
       }
 
     }
@@ -346,7 +434,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      x_val = (int)((map[x][y].x * 260)/255);
+      x_val = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
       if(min_val > x_val) {
         min_val = x_val;
       }
@@ -362,7 +450,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].x * 260)/255);
+      value = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
       x_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[x_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -393,7 +481,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      y_val = (int)((map[x][y].y * 5)/255);
+      y_val = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
       if(min_val > y_val) {
         min_val = y_val;
       }
@@ -409,7 +497,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].y * 5)/255);
+      value = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
       y_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[y_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -441,7 +529,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      z_val = (int)((map[x][y].z * 1500)/255);
+      z_val = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
       if(min_val > z_val) {
         min_val = z_val;
       }
@@ -457,7 +545,7 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].z * 1500)/255);
+      value = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
       z_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[z_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -492,252 +580,32 @@ void output_html(BMU *centroids, BMU *final_bmus, bool auto_reload)
 
 // END Kohonen algorithm methods
 
-// START K-Means algorithm methods
-
-/**
- * assign data points to current centroids
- */
-void update_assignments(uint num_clusters)
-{
-  uint      i, j, d;
-  uint      nearest_centroid;
-  uint64    min_dist;
-  centroid  *cp, *cp_last;
-
-  // clear out centroids
-  for (cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; cp++) {
-    cp->num_points = 0;
-    cp->sum_x = 0;
-    cp->sum_y = 0;
-  }
-
-  // for each data point...
-  for (i = 0; i < total_samples; i++) {
-    // find nearest centroid
-    for (j = 0; j < num_clusters; j++) {
-      d = distance(i, centroids[j].point_id);
-      if (j == 0 || min_dist > d) {
-        min_dist = d;
-        nearest_centroid = j;
-      }
-    }
-
-    // assign point to centroid
-    point_assignments[i].centroid_id = nearest_centroid;
-    point_assignments[i].distance = min_dist;
-
-    // update centroid stats
-    centroids[nearest_centroid].sum_x += datax(i);
-    centroids[nearest_centroid].sum_y += datay(i);
-    centroids[nearest_centroid].num_points++;
-  }
-
-}
-
-/**
- * pick new centroids based on mean coordinates in the cluster
- */
-void update_centroids(uint num_clusters)
-{
-  uint        i, a, b;
-  uint        *dp;
-  uint64      d;
-  float       k;
-  assignment  *ap;
-  centroid    *cp, *cp_last;
-
-  // initialize
-  for (cp = centroids, cp_last = centroids + num_clusters; cp < cp_last; cp++) {
-    cp->target_x = cp->num_points ? (cp->sum_x / cp->num_points) : (cp->sum_x / 1);
-    cp->target_y = cp->num_points ? (cp->sum_y / cp->num_points) : (cp->sum_y / 1);
-    cp->prev_distance = cp->best_distance;
-    cp->best_distance = BIG_NUM;
-  }
-
-  // go through points; for each respective centroid, find the
-  // point closest to the target new centroid
-  for (i = 0, ap = point_assignments, dp = kmeans_data_points; i < total_samples; i++, ap++, dp += 2) {
-    // get my centroid
-    cp = centroids + ap->centroid_id;
-
-    // calculate distance to target
-    a = *dp - cp->target_x;
-    b = *(dp + 1) - cp->target_y;
-    d = a * a + b * b;
-
-    // new closest point?
-    if (cp->best_distance > d) {
-      cp->best_distance = d;
-      cp->point_id = i;
-    }
-  }
-
-  // check improvement
-  improved = 0;
-  improvement = 0.0;
-
-  for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
-    if (cp->prev_distance) {
-      k = ((float)cp->best_distance - (float)cp->prev_distance) / (float)cp->prev_distance;
-      improvement += fabs(k);
-      improved++;
-    }
-  }
-
-}
-
-/**
- * allocate the array for data point to centroid assignments
- */
-void setup_assignments()
-{
-  point_assignments = (assignment *)calloc(total_samples, sizeof(assignment));
-}
-
-/**
- * allocate the array for centroids, then pick the initial centroids
- */
-void setup_centroids(uint num_clusters)
-{
-  uint i, j, k, x, y;
-  struct timeval tv;
-
-  // seed rand with microseconds to increase variance if called repeatedly quickly
-  gettimeofday(&tv, NULL);
-  srand(tv.tv_usec);
-
-  // allocate centroids array
-  centroids = (centroid *)calloc(num_clusters, sizeof(centroid));
-
-  // pick starting centroids, ensuring uniqueness
-  for (i = 0; i < num_clusters; ) {
-    // grab a random data point
-    j = random() % total_samples;
-
-    // take if first one or unassigned
-    if (i == 0 || !is_assigned(j)) {
-      centroids[i].point_id = j;
-
-      // mark this point (and all points like it) as assigned;
-      // this traversal works because we know the data set is sorted
-      x = datax(j);
-      y = datay(j);
-
-      for (k = j; k < total_samples && x == datax(k) && y == datay(k); k++)
-        set_assigned(k);
-      for (k = j; k-- > 0 && x == datax(k) && y == datay(k); )
-        set_assigned(k);
-
-      // on to next centroid
-      i++;
-    }
-
-    // done if all assigned
-    for (j = 0; j < total_samples; j++)
-      if (!is_assigned(j)) break;
-    if (j >= total_samples) break;
-  }
-
-  // it's possible that the actual number of clusters is less than asked for
-  if (i < num_clusters)
-    num_clusters = i;
-}
-
-void search_clusters_in_bmu(uint num_clusters)
-{
-  uint        i, j, x, y;
-  double      distance_mean, distance_sum;
-  float       average_improvement;
-  assignment  *ap, *ap_last;
-  centroid    *cp;
-
-  setup_assignments();
-  setup_centroids(num_clusters);
-
-  for (uint i = 0; i < MAX_KMEANS_ITERATIONS; i++) {
-    update_assignments(num_clusters);
-    update_centroids(num_clusters);
-    if (improved) {
-      average_improvement = improvement / improved;
-
-      // done if average improvement is less than 0.1%
-      if (average_improvement < 0.001)
-        break;
-    }
-  }
-
-
-  // calculate standard deviation of point-to-centroid distances
-  for (i = 0, cp = centroids; i < num_clusters; i++, cp++) {
-    // centroid coords
-    x = datax(cp->point_id);
-    y = datay(cp->point_id);
-
-    if (cp->num_points <= 1) {
-      printf("%d\t%d\t%d\t0.0\n", x, y, cp->num_points);
-    } else {
-      // calculate mean distance
-      distance_sum = 0.0;
-      for (j = 0, ap = point_assignments, ap_last = point_assignments + total_samples; ap < ap_last; j++, ap++) {
-        if (ap->centroid_id != i) continue;
-        distance_sum += sqrt(ap->distance);
-      }
-      distance_mean = distance_sum / cp->num_points;
-
-      // calculate summation for sample variance
-      distance_sum = 0.0;
-      for (ap = point_assignments, ap_last = point_assignments + total_samples; ap < ap_last; ap++) {
-        if (ap->centroid_id != i) continue;
-        distance_sum += pow2(sqrt(ap->distance) - distance_mean);
-      }
-
-      printf("Centroid: (%d,%d)\tCluster size(bmu's): %d\tAvg. distance: %.1lf\n", x, y, cp->num_points, sqrt(distance_sum / (cp->num_points - 1)));
-    }
-  }
-
-}
-
-// END K-Means algorithm methods
-
 int main(int argc, char **argv)
 {
+    // usage: ./kohonen file_with_samples
+    char *filename = argv[1];
+    load_and_initialize_samples(filename);
+
     int MAX_TRAINING_ROUNDS = 12;
     float ROUND_INC = 1.0f/(float)(MAX_TRAINING_ROUNDS);
     float r = 0.0f;
 
-    int MAX_ITER = 3000;
+    int MAX_ITER = total_samples * 50; // Number of iterations is 50 times the number of input samples
     float T_INC = 1.0f/(float)(MAX_ITER);
     float t = 0.0f;
     BMU *bmu;
-    BMU *cluster_centroid_bmus;
     BMU *final_bmus;
-    CentroidBMU *centroid_bmus_storage;
-    CentroidBMU centroid_bmu;
-    int total_centroid_bmus = 0;
-    centroid  *cp;
-    uint i, e, o, num_clusters;
     int iteration_num;
     int round_num;
     Sample *sample;
-    bool found = FALSE;
-
-    // usage: ./kohonen file_with_samples total_samples max_clusters
-    input_file_name = argv[1];
-    total_samples = atoi(argv[2]);
-    max_clusters = atoi(argv[3]);
 
     // seed random
     srand(time(NULL));
 
-    kmeans_data_points = (uint *)calloc(total_samples * 2, sizeof(uint));
     final_bmus = (BMU *)malloc(sizeof(BMU) * total_samples);
-    cluster_centroid_bmus = (BMU *)malloc(sizeof(BMU) * max_clusters);
-    centroid_bmus_storage = (CentroidBMU *)malloc(sizeof(CentroidBMU) * max_clusters * 10);
-
-    load_and_initialize_samples();
 
     initialize_som_map();
-    output_html(cluster_centroid_bmus, final_bmus, TRUE);
+    //output_html(final_bmus, TRUE);
 
     round_radius = initial_radius;
     round_num = 0;
@@ -760,9 +628,7 @@ int main(int argc, char **argv)
          t += T_INC;
          iteration_num++;
 
-         if(!(rand() % 250)) {
-           output_html(cluster_centroid_bmus, final_bmus, TRUE);
-         }
+         //output_html(final_bmus, TRUE);
          //usleep(100000);
        }
 
@@ -770,76 +636,22 @@ int main(int argc, char **argv)
        round_num++;
     }
 
-    output_html(cluster_centroid_bmus, final_bmus, TRUE);
+    //output_html(final_bmus, TRUE);
 
     // Save the BMU coordinates in the SOM map
-    for (uint i = 0; i < total_samples; i++) {
+    for (int i = 0; i < total_samples; i++) {
       sample = pick_sample(i);
       bmu = search_bmu(sample); // Best Match Unit
 
-      datax(i) = (uint)bmu->x_coord;
-      datay(i) = (uint)bmu->y_coord;
       final_bmus[i].x_coord = (uint)bmu->x_coord;
       final_bmus[i].y_coord = (uint)bmu->y_coord;
 
       free(bmu);
     }
 
+    output_html(final_bmus, FALSE);
 
-    // NOTA: Tenir en compte els centroids que apareixen amb més freqüència a mesura que s'augmenta el nombre de clusters no
-    // és efectiu. Aquests centroids poden no sér realment bons.
-    // Cal donar prioritat als centroids que contenen més nodes i de més proximitat!!!
-    // CAL MODIFICAR/MILLORAR L'ALGORISME!!!
-
-    // Search BMU clusters
-    //for(num_clusters = 0; num_clusters < max_clusters; num_clusters++) {
-
-       num_clusters = max_clusters;
-
-      //for(e = 0; e < 10; e++) {
-        // Search clusters from BMU coordinates
-        search_clusters_in_bmu(num_clusters);
-        printf("\n*\n");
-        // Prepare structure for painting clusters centroids
-        /*
-        for (i = 0, cp = centroids; i < max_clusters; i++, cp++) {
-            cluster_centroid_bmus[i].x_coord = datax(cp->point_id);
-            cluster_centroid_bmus[i].y_coord = datay(cp->point_id);
-
-            found = FALSE;
-            for (o = 0; (o < total_centroid_bmus) && (!found); o++) {
-              if((centroid_bmus_storage[o].x_coord == datax(cp->point_id)) && (centroid_bmus_storage[o].y_coord == datay(cp->point_id))) {
-                centroid_bmus_storage[o].count++;
-                found = TRUE;
-              }
-            }
-
-            if(!found) {
-              centroid_bmus_storage[total_centroid_bmus].x_coord = datax(cp->point_id);
-              centroid_bmus_storage[total_centroid_bmus].y_coord = datay(cp->point_id);
-              centroid_bmus_storage[total_centroid_bmus].count++;
-              total_centroid_bmus++;
-            }
-
-        }*/
-
-      //}
-
-    //}
-/*
-    printf("\n\nWinning centroids:\n");
-
-    for(e = 0; e < total_centroid_bmus; e++) {
-      centroid_bmu = centroid_bmus_storage[e];
-      printf("Centroid: (%d,%d)\tCount: %d\n", centroid_bmu.x_coord, centroid_bmu.y_coord, centroid_bmu.count);
-    }
-*/
-    output_html(cluster_centroid_bmus, final_bmus, FALSE);
-
-    free(cluster_centroid_bmus);
     free(final_bmus);
-    free(kmeans_data_points);
-
     free_allocated_memory();
 
     return 0;
