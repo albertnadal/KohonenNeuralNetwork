@@ -50,6 +50,7 @@ Sample* samples;
 int total_components;
 char** components_name;
 uint* samples_max_components_values;
+uint* samples_min_components_values;
 int initial_radius = 80;
 float round_radius;
 
@@ -164,6 +165,7 @@ void load_and_initialize_samples(char *filename)
       total_samples++;
     }
   }
+  total_samples--;
   fclose(file);
 
   printf("\n\nTotal samples: %d\n\n", total_samples);
@@ -181,10 +183,12 @@ void load_and_initialize_samples(char *filename)
   components_name = explode_string(line, ',', &total_components);
 
   samples_max_components_values = (uint*) malloc(sizeof(uint) * total_components);
+  samples_min_components_values = (uint*) malloc(sizeof(uint) * total_components);
 
   // Initialize max values array to blank
   for(int e = 0; e < total_components; e++) {
     samples_max_components_values[e] = 0;
+    samples_min_components_values[e] = 0;
   }
 
   // Load values from file
@@ -197,6 +201,9 @@ void load_and_initialize_samples(char *filename)
       if(samples_max_components_values[e] < value) {
         samples_max_components_values[e] = value;
       }
+      if(samples_min_components_values[e] > value) {
+        samples_min_components_values[e] = value;
+      }
     }
   }
 
@@ -208,7 +215,10 @@ void load_and_initialize_samples(char *filename)
     for(int e = 0; e < total_components; e++) {
       value = samples[i].components[e];
       //printf("VALUE: %d | MAX VAL: %d | ", value, samples_max_components_values[e]);
-      samples[i].components[e] = (unsigned int)((value * 255)/samples_max_components_values[e]);
+      samples[i].components[e] = (unsigned int)((value * 255)/(samples_max_components_values[e] - samples_min_components_values[e]));
+      if(e==1) {
+        printf("HAB: %d | NORM: %d\n", value, samples[i].components[e]);
+      }
       //printf("NORMALIZED: %d\n", samples[i].components[e]);
     }
     //printf("\n");
@@ -364,6 +374,7 @@ void free_allocated_memory() {
   free(map);
 
   free(samples_max_components_values);
+  free(samples_min_components_values);
 }
 
 char* concat(const char *s1, const char *s2)
@@ -409,9 +420,9 @@ void output_html(BMU *final_bmus, bool auto_reload)
         }
       }
 
-      x_val = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
-      y_val = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
-      z_val = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
+      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
+      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
+      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
 
       if(found_bmu) {
         fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(255,255,255);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
@@ -434,7 +445,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      x_val = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
+      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
       if(min_val > x_val) {
         min_val = x_val;
       }
@@ -450,7 +461,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[0] * samples_max_components_values[0])/255);
+      value = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
       x_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[x_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -481,7 +492,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      y_val = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
+      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
       if(min_val > y_val) {
         min_val = y_val;
       }
@@ -497,7 +508,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[1] * samples_max_components_values[1])/255);
+      value = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
       y_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[y_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
@@ -529,7 +540,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   min_val = 9999999;
   for(y = 0; y < MAP_HEIGHT; y++) {
     for(x = 0; x < MAP_WIDTH; x++) {
-      z_val = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
+      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
       if(min_val > z_val) {
         min_val = z_val;
       }
@@ -545,7 +556,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   for(y = 0; y < MAP_HEIGHT; y++) {
     fprintf(f, "<tr>");
     for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[2] * samples_max_components_values[2])/255);
+      value = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
       z_val = (int)(((value - min_val) * 255)/diff_val);
       RGB *color = &huebar[z_val];
       fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
