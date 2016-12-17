@@ -21,9 +21,6 @@
 
 typedef struct Neuron {
    unsigned int* components;
-   //unsigned int x;
-   //unsigned int y;
-   //unsigned int z;
 } Neuron;
 
 typedef struct BMU {
@@ -393,6 +390,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
     fprintf(f, "<html><head></head><body>");
   }
 
+/*
   fprintf(f, "<br/><h2>Neural Network SOM Map</h2>");
   fprintf(f, "<table style='border-collapse: collapse;'>");
 
@@ -425,155 +423,62 @@ void output_html(BMU *final_bmus, bool auto_reload)
     fprintf(f, "</tr>");
   }
   fprintf(f, "</table>");
+*/
 
   fprintf(f, "<br/><h2>Components</h2>");
 
-  fprintf(f, "<div style=\"width:500px;height:250px\">");
-  fprintf(f, "<h3>Metres quadrats</h3>");
-  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
-  // Search the min and max values of each vector component
-  max_val = 0;
-  min_val = 9999999;
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    for(x = 0; x < MAP_WIDTH; x++) {
-      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
-      if(min_val > x_val) {
-        min_val = x_val;
-      }
 
-      if(max_val < x_val) {
-        max_val = x_val;
-      }
-    }
-  }
+  for(int c = 0; c < total_components; c++) {
 
-  diff_val = max_val - min_val;
+    fprintf(f, "<div style=\"width:500px;height:250px\">");
+    fprintf(f, "<h3>%s</h3>", components_name[c]);
+    fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
+    // Search the min and max values of each vector component
+    max_val = 0;
+    min_val = 9999999;
+    for(y = 0; y < MAP_HEIGHT; y++) {
+      for(x = 0; x < MAP_WIDTH; x++) {
+        x_val = (int)((map[x][y].components[c] * (samples_max_components_values[c] - samples_min_components_values[c]))/NORMALIZATION_VALUE);
+        if(min_val > x_val) {
+          min_val = x_val;
+        }
 
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    fprintf(f, "<tr>");
-    for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
-      x_val = (int)(((value - min_val) * 255)/diff_val);
-      RGB *color = &huebar[x_val];
-      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
-    }
-    fprintf(f, "</tr>");
-  }
-  fprintf(f, "</table></div>");
-
-  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
-  for(e = 0.0f; e < 255.0f; e+=2.86f) {
-    RGB *color = &huebar[(int)e];
-    if(e == 0.0f) {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
-    } else {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
-    }
-  }
-  fprintf(f, "</table></div>");
-
-  fprintf(f, "</div>");
-
-
-  fprintf(f, "<div style=\"width:500px;height:250px\">");
-  fprintf(f, "<h3>Habitacions</h3>");
-  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
-  // Search the min and max values of each vector component
-  max_val = 0;
-  min_val = 9999999;
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    for(x = 0; x < MAP_WIDTH; x++) {
-      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
-      if(min_val > y_val) {
-        min_val = y_val;
-      }
-
-      if(max_val < y_val) {
-        max_val = y_val;
+        if(max_val < x_val) {
+          max_val = x_val;
+        }
       }
     }
-  }
 
-  diff_val = max_val - min_val;
+    diff_val = max_val - min_val;
 
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    fprintf(f, "<tr>");
-    for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
-      y_val = (int)(((value - min_val) * 255)/diff_val);
-      RGB *color = &huebar[y_val];
-      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
-    }
-    fprintf(f, "</tr>");
-  }
-  fprintf(f, "</table></div>");
-
-  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
-  for(e = 0.0f; e < 255.0f; e+=2.86f) {
-    RGB *color = &huebar[(int)e];
-    if(e == 0.0f) {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
-    } else {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
-    }
-  }
-  fprintf(f, "</table></div>");
-  fprintf(f, "</div>");
-
-
-
-
-  fprintf(f, "<div style=\"width:500px;height:250px\">");
-  fprintf(f, "<h3>Preu lloguer</h3>");
-  fprintf(f, "<div style='position: absolute;'><table style='border-collapse: collapse;'>");
-  // Search the min and max values of each vector component
-  max_val = 0;
-  min_val = 9999999;
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    for(x = 0; x < MAP_WIDTH; x++) {
-      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
-      if(min_val > z_val) {
-        min_val = z_val;
+    for(y = 0; y < MAP_HEIGHT; y++) {
+      fprintf(f, "<tr>");
+      for(x = 0; x < MAP_WIDTH; x++) {
+        value = (int)((map[x][y].components[c] * (samples_max_components_values[c] - samples_min_components_values[c]))/NORMALIZATION_VALUE);
+        x_val = (int)(((value - min_val) * 255)/diff_val);
+        RGB *color = &huebar[x_val];
+        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
       }
+      fprintf(f, "</tr>");
+    }
+    fprintf(f, "</table></div>");
 
-      if(max_val < z_val) {
-        max_val = z_val;
+    fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
+    for(e = 0.0f; e < 255.0f; e+=2.86f) {
+      RGB *color = &huebar[(int)e];
+      if(e == 0.0f) {
+        fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
+      } else {
+        fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
       }
     }
+    fprintf(f, "</table></div>");
+
+    fprintf(f, "</div>");
   }
-
-  diff_val = max_val - min_val;
-
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    fprintf(f, "<tr>");
-    for(x = 0; x < MAP_WIDTH; x++) {
-      value = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
-      z_val = (int)(((value - min_val) * 255)/diff_val);
-      RGB *color = &huebar[z_val];
-      fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='%d'></td>", color->r, color->g, color->b, value);
-    }
-    fprintf(f, "</tr>");
-  }
-
-  fprintf(f, "</table></div>");
-
-  fprintf(f, "<div style='position: absolute; left: 420px;'><table style='border-collapse: collapse;'>");
-  for(e = 0.0f; e < 255.0f; e+=2.86f) {
-    RGB *color = &huebar[(int)e];
-    if(e == 0.0f) {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'><div style=\"position:absolute; width:50px;top:0px;text-align:left;\">&nbsp; %d</div><div style=\"position: absolute; text-align: left; width: 50px; top: 85px;\">&nbsp; %d</div><div style=\"position:absolute; width:50px;bottom:0px;text-align:left;\">&nbsp; %d</div></td></tr>", color->r, color->g, color->b, min_val, min_val + (max_val-min_val)/2, max_val);
-    } else {
-      fprintf(f, "<tr><td style='width:3px;height:1px;background-color:rgb(%d,%d,%d);'></td></tr>", color->r, color->g, color->b);
-    }
-  }
-
-  fprintf(f, "</table></div>");
-  fprintf(f, "</div>");
-
 
 
   fprintf(f, "</tr></table>");
-
 
   free(huebar);
   fprintf(f, "</body></html>");
