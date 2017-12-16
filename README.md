@@ -21,3 +21,5 @@ The output of this command is a file named 'generated_kohonen_map.html' containi
 
 ![](http://www.lafruitera.com/kohonen-map-sample.png)
 
+### License
+MIT
