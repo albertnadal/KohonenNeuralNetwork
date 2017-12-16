@@ -16,11 +16,6 @@ void set_hue2rgb_channels(int idx, int r, int g, int b, double I)
   if (idx<0) return;
   if (idx>=huecolors) return;
 
-/*
-  const double target=0.85;
-  I=1-I;
-  I=target+I*(1-target);
-*/
   I=1;
 
   hue2rgb[idx].r=r*I;
@@ -62,12 +57,6 @@ RGB* create_color_huebar(int bar_length)
        int r=hue2rgb[i].r;
        int g=hue2rgb[i].g;
        int b=hue2rgb[i].b;
-/*
-       r*=195;
-       r/=255;
-       g*=175;
-       g/=255;
-*/
        bar[x].r = r;
        bar[x].g = g;
        bar[x].b = b;

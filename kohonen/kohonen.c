@@ -377,7 +377,7 @@ void output_html(BMU *final_bmus, bool auto_reload)
   float e;
   RGB *huebar = create_color_huebar(255);
 
-  FILE *f = fopen("test.html", "w");
+  FILE *f = fopen("generated_kohonen_map.html", "w");
   if (f == NULL)
   {
       printf("Error opening file!\n");
@@ -389,41 +389,6 @@ void output_html(BMU *final_bmus, bool auto_reload)
   } else {
     fprintf(f, "<html><head></head><body>");
   }
-
-/*
-  fprintf(f, "<br/><h2>Neural Network SOM Map</h2>");
-  fprintf(f, "<table style='border-collapse: collapse;'>");
-
-  for(y = 0; y < MAP_HEIGHT; y++) {
-    fprintf(f, "<tr>");
-    for(x = 0; x < MAP_WIDTH; x++) {
-
-      found_bmu = FALSE;
-      for (i = 0; ((i < total_samples) && (final_bmus)); i++) {
-        if((final_bmus[i].x_coord == x) && (final_bmus[i].y_coord == y)) {
-          found_bmu = TRUE;
-        }
-      }
-
-      x_val = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/NORMALIZATION_VALUE);
-      y_val = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/NORMALIZATION_VALUE);
-      z_val = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/NORMALIZATION_VALUE);
-
-      red = (int)((map[x][y].components[0] * (samples_max_components_values[0] - samples_min_components_values[0]))/255);
-      green = (int)((map[x][y].components[1] * (samples_max_components_values[1] - samples_min_components_values[1]))/255);
-      blue = (int)((map[x][y].components[2] * (samples_max_components_values[2] - samples_min_components_values[2]))/255);
-
-      if(found_bmu) {
-        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(255,255,255);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", x, y, z_val, x_val, y_val);
-      } else {
-        fprintf(f, "<td style='width:3px;height:3px;background-color:rgb(%d,%d,%d);' title='X:%d | Y:%d | Preu:%d | M2:%d | Hab:%d'></td>", red, green, blue, x, y, z_val, x_val, y_val);
-      }
-
-    }
-    fprintf(f, "</tr>");
-  }
-  fprintf(f, "</table>");
-*/
 
   fprintf(f, "<br/><h2>Components</h2>");
 
@@ -542,8 +507,6 @@ int main(int argc, char **argv)
        r += ROUND_INC;
        round_num++;
     }
-
-    //output_html(final_bmus, TRUE);
 
     // Save the BMU coordinates in the SOM map
     for (int i = 0; i < total_samples; i++) {
