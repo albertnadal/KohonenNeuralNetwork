@@ -22,12 +22,12 @@ const uint32 SCR_HEIGHT = 450;
 
 pthread_t kohonenMainThreadId;
 
-#define MAP_WIDTH 40
-#define MAP_HEIGHT 30
+#define MAP_WIDTH 160
+#define MAP_HEIGHT 120
 #define TOTAL_COMPONENTS 3
 #define INITIAL_TRAINING_ITERATIONS_PER_EPOCH 1500
 #define TOTAL_EPOCHS 8
-#define INITIAL_RADIUS 14
+#define INITIAL_RADIUS 40
 #define INITIAL_LEARNING_RULE 0.9f
 #define pow2(x) ((x) * (x))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -93,7 +93,7 @@ void process_input(GLFWwindow *window);
 
 void load_and_initialize_samples()
 {
-  total_samples = 27;
+  total_samples = 1000;
   printf("\n\nTotal samples: %d\n\n", total_samples);
 
   // 'samples' is the data structure used to store the sample points for Kohonen algorithm process
@@ -103,113 +103,11 @@ void load_and_initialize_samples()
     samples[i].components = (unsigned int *) malloc(sizeof(unsigned int) * TOTAL_COMPONENTS);
   }
 
-  samples[0].components[0] = 3;
-  samples[0].components[1] = 255;
-  samples[0].components[2] = 0;
-
-  samples[1].components[0] = 0;
-  samples[1].components[1] = 247;
-  samples[1].components[2] = 3;
-
-  samples[2].components[0] = 0;
-  samples[2].components[1] = 252;
-  samples[2].components[2] = 5;
-
-  samples[3].components[0] = 3;
-  samples[3].components[1] = 239;
-  samples[3].components[2] = 8;
-
-  samples[4].components[0] = 0;
-  samples[4].components[1] = 232;
-  samples[4].components[2] = 3;
-
-  samples[5].components[0] = 3;
-  samples[5].components[1] = 255;
-  samples[5].components[2] = 0;
-
-  samples[6].components[0] = 0;
-  samples[6].components[1] = 250;
-  samples[6].components[2] = 5;
-
-  samples[7].components[0] = 255;
-  samples[7].components[1] = 3;
-  samples[7].components[2] = 0;
-
-  samples[8].components[0] = 247;
-  samples[8].components[1] = 3;
-  samples[8].components[2] = 0;
-
-  samples[9].components[0] = 252;
-  samples[9].components[1] = 5;
-  samples[9].components[2] = 0;
-
-  samples[10].components[0] = 239;
-  samples[10].components[1] = 8;
-  samples[10].components[2] = 3;
-
-  samples[11].components[0] = 232;
-  samples[11].components[1] = 0;
-  samples[11].components[2] = 3;
-
-  samples[12].components[0] = 255;
-  samples[12].components[1] = 3;
-  samples[12].components[2] = 3;
-
-  samples[13].components[0] = 249;
-  samples[13].components[1] = 5;
-  samples[13].components[2] = 3;
-
-  samples[14].components[0] = 247;
-  samples[14].components[1] = 3;
-  samples[14].components[2] = 5;
-
-  samples[15].components[0] = 234;
-  samples[15].components[1] = 8;
-  samples[15].components[2] = 3;
-
-  samples[16].components[0] = 3;
-  samples[16].components[1] = 0;
-  samples[16].components[2] = 255;
-
-  samples[17].components[0] = 3;
-  samples[17].components[1] = 0;
-  samples[17].components[2] = 247;
-
-  samples[18].components[0] = 5;
-  samples[18].components[1] = 0;
-  samples[18].components[2] = 252;
-
-  samples[19].components[0] = 8;
-  samples[19].components[1] = 3;
-  samples[19].components[2] = 239;
-
-  samples[20].components[0] = 0;
-  samples[20].components[1] = 3;
-  samples[20].components[2] = 232;
-
-  samples[21].components[0] = 3;
-  samples[21].components[1] = 3;
-  samples[21].components[2] = 255;
-
-  samples[22].components[0] = 5;
-  samples[22].components[1] = 3;
-  samples[22].components[2] = 249;
-
-  samples[23].components[0] = 3;
-  samples[23].components[1] = 5;
-  samples[23].components[2] = 247;
-
-  samples[24].components[0] = 8;
-  samples[24].components[1] = 3;
-  samples[24].components[2] = 234;
-
-  samples[25].components[0] = 3;
-  samples[25].components[1] = 5;
-  samples[25].components[2] = 247;
-
-  samples[26].components[0] = 5;
-  samples[26].components[1] = 3;
-  samples[26].components[2] = 234;
+  for(int e = 0; e < total_samples; e++) {
+    samples[e].components[0] = rand() % 255;
+    samples[e].components[1] = rand() % 255;
+    samples[e].components[2] = rand() % 255;
+  }
 }
 
 void initialize_som_map()
